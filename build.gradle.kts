@@ -126,9 +126,9 @@ dependencies {
 configure(
     listOf(
         project(":utbot-api"),
+        project(":utbot-util"),
         project(":utbot-core"),
-        project(":utbot-framework"),
-        project(":utbot-framework-api"),
+        project(":utbot-core-api"),
         project(":utbot-fuzzers"),
         project(":utbot-instrumentation"),
         project(":utbot-rd"),

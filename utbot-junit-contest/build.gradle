@@ -49,7 +49,7 @@ jacocoTestReport {
 }
 
 dependencies {
-    implementation project(":utbot-framework")
+    implementation project(":utbot-core")
     implementation project(":utbot-analytics")
 
     implementation "com.github.UnitTestBot:soot:${sootCommitHash}"

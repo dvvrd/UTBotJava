@@ -13,7 +13,7 @@ configuring development environment.
 
 The project structure is mostly straightforward and the modules are self-explanatory, e.g.:
 
-* ```utbot-framework``` — everything related to UnitTestBot engine (including tests);
+* ```utbot-core``` — everything related to UnitTestBot engine (including tests);
 * ```utbot-intellij``` — IDE plugin implementation;
 * ```utbot-sample``` — a framework with examples to demonstrate engine capacity.
 

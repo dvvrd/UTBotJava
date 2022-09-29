@@ -8,7 +8,7 @@ If you develop different modules of our project like CE, CLI or else, you might 
 It depends on two factors:
 
 - Find the project you will run. For instance, for Idea plugin it is **_utbot-intellij_** subproject
-- Chose appropriate log4j2.xml. If you are going to run tests for framework, it\`s in the test folder of utbot-framework subproject.
+- Chose appropriate log4j2.xml. If you are going to run tests for framework, it\`s in the test folder of utbot-core subproject.
 
 The file is usually in the resource folder. 
 <br/>
@@ -49,7 +49,7 @@ Sometimes the logging information could be printed in a wrong destination. In th
 
 🟢**6. Message format**
 
-If you do not like the format for logging output, you can change it in PatternLayout tag (see log4j2.xml in utbot-framework/src/test/resources/) 
+If you do not like the format for logging output, you can change it in PatternLayout tag (see log4j2.xml in utbot-core/src/test/resources/) 
 <br/>
 <br/>
 

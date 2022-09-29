@@ -3,7 +3,7 @@ configurations {
 }
 
 dependencies {
-    implementation project(':utbot-framework')
+    implementation project(':utbot-core')
 
     implementation "org.apache.maven:maven-core:$mavenPluginApiVersion"
     implementation "org.apache.maven:maven-plugin-api:$mavenPluginApiVersion"
@@ -93,10 +93,10 @@ jar.dependsOn generatePluginDescriptor
 
 generatePluginDescriptor.dependsOn([
     project(':utbot-api'),
-    project(':utbot-core'),
+    project(':utbot-util'),
     project(':utbot-instrumentation'),
-    project(':utbot-framework'),
-    project(':utbot-framework-api'),
+    project(':utbot-core'),
+    project(':utbot-core-api'),
     project(':utbot-fuzzers'),
     project(':utbot-rd'),
     project(':utbot-summary')

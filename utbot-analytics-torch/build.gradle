@@ -6,8 +6,8 @@ def osName = System.getProperty('os.name').toLowerCase().split()[0]
 if (osName == "mac") osName = "macosx"
 String classifier = osName + "-x86_64"
 
-evaluationDependsOn(':utbot-framework')
-compileTestJava.dependsOn tasks.getByPath(':utbot-framework:testClasses')
+evaluationDependsOn(':utbot-core')
+compileTestJava.dependsOn tasks.getByPath(':utbot-core:testClasses')
 
 dependencies {
     api project(':utbot-analytics')
@@ -21,7 +21,7 @@ dependencies {
     implementation "ai.djl.pytorch:pytorch-engine:$djlApiVersion"
     implementation "ai.djl.pytorch:pytorch-native-auto:$pytorchNativeVersion"
 
-    testImplementation project(':utbot-framework').sourceSets.test.output
+    testImplementation project(':utbot-core').sourceSets.test.output
 }
 
 test {

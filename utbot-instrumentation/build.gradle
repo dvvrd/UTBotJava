@@ -1,5 +1,5 @@
 dependencies {
-    implementation project(':utbot-framework-api')
+    implementation project(':utbot-core-api')
     implementation project(':utbot-rd')
 
     implementation group: 'org.ow2.asm', name: 'asm', version: asmVersion

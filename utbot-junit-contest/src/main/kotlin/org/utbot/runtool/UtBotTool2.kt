@@ -80,7 +80,7 @@ class UtBotTool2 : ITestingTool {
 
 
         //TODO I think we have some strange problems with z3, this addition must absent
-        val additionalUnpackedZ3 = File("utbot-framework/build/resources/main").run {
+        val additionalUnpackedZ3 = File("utbot-core/build/resources/main").run {
             if (isDirectory && exists())
                 File.pathSeparator + absolutePath
             else

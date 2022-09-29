@@ -12,7 +12,7 @@ dependencies {
     shadow gradleApi()
     shadow localGroovy()
 
-    implementation project(":utbot-framework")
+    implementation project(":utbot-core")
     implementation "io.github.microutils:kotlin-logging:$kotlinLoggingVersion"
 
     testImplementation "org.mockito:mockito-core:$mockitoVersion"
@@ -55,7 +55,7 @@ shadowJar {
     from shadowBugWorkaround
 }
 
-// no module metadata => no dependency on the `utbot-framework`
+// no module metadata => no dependency on the `utbot-core`
 tasks.withType(GenerateModuleMetadata) {
     enabled = false
 }
@@ -64,9 +64,9 @@ publishing {
     publications {
         pluginMaven(MavenPublication) {
             pom.withXml {
-                // removing a dependency to `utbot-framework` from the list of dependencies
+                // removing a dependency to `utbot-core` from the list of dependencies
                 asNode().dependencies.dependency.each { dependency ->
-                    if (dependency.artifactId[0].value() == 'utbot-framework') {
+                    if (dependency.artifactId[0].value() == 'utbot-core') {
                         assert dependency.parent().remove(dependency)
                     }
                 }

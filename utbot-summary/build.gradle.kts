@@ -5,7 +5,7 @@ val sootCommitHash: String by rootProject
 val mockitoVersion: String by rootProject
 
 dependencies {
-    implementation(project(":utbot-framework-api"))
+    implementation(project(":utbot-core-api"))
     implementation("com.github.UnitTestBot:soot:${sootCommitHash}")
     implementation(project(":utbot-fuzzers"))
     implementation(project(":utbot-instrumentation"))

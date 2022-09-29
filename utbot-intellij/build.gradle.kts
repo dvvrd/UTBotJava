@@ -75,9 +75,9 @@ dependencies {
     implementation("org.apache.httpcomponents.client5:httpclient5:5.1")
     implementation(group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version = jacksonVersion)
 
-    implementation(project(":utbot-framework")) { exclude(group = "org.slf4j", module = "slf4j-api") }
+    implementation(project(":utbot-core")) { exclude(group = "org.slf4j", module = "slf4j-api") }
     implementation(project(":utbot-fuzzers"))
     //api(project(":utbot-analytics"))
     testImplementation("org.mock-server:mockserver-netty:5.4.1")
-    testApi(project(":utbot-framework"))
+    testApi(project(":utbot-core"))
 }

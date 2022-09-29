@@ -16,7 +16,7 @@ val kotlinLoggingVersion: String by rootProject
 val rgxgenVersion: String by rootProject
 
 dependencies {
-    implementation(project(":utbot-framework-api"))
+    implementation(project(":utbot-core-api"))
 
     implementation("com.github.UnitTestBot:soot:${sootCommitHash}")
     implementation(group = "io.github.microutils", name = "kotlin-logging", version = kotlinLoggingVersion)

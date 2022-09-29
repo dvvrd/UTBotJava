@@ -10,9 +10,9 @@ pluginManagement {
 
 rootProject.name = 'utbot'
 
+include 'utbot-util'
 include 'utbot-core'
-include 'utbot-framework'
-include 'utbot-framework-api'
+include 'utbot-core-api'
 include 'utbot-intellij'
 include 'utbot-sample'
 include 'utbot-fuzzers'
@@ -28,6 +28,6 @@ include 'utbot-summary'
 include 'utbot-gradle'
 include 'utbot-maven'
 include 'utbot-summary-tests'
-include 'utbot-framework-test'
+include 'utbot-core-test'
 include 'utbot-rd'
 

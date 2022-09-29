@@ -14,7 +14,7 @@
     },
     {
       "FIRST": "utbot-api",
-      "SECOND": "utbot-framework-api",
+      "SECOND": "utbot-core-api",
     }
   ]
 }

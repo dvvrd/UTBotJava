@@ -142,7 +142,7 @@ private fun CoverageInfo.toMethodCoverage(methodSignature: String): Pair<Int, In
     return visitedCount to methodRange.count()
 }
 
-// The following helper functions for counting JaCoCo coverage were copied from `utbot-framework`.
+// The following helper functions for counting JaCoCo coverage were copied from `utbot-core`.
 
 private fun calculateCoverage(clazz: KClass<*>, block: (KClass<*>) -> Unit): CoverageBuilder {
     val targetName = clazz.qualifiedName!!

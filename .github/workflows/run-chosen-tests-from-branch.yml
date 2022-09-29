@@ -7,13 +7,13 @@ on:
           type: choice
           description: "Project you want to run tests for."
           required: true
-          default: utbot-framework
+          default: utbot-core
           options:
           - utbot-analytics
           - utbot-cli
+          - utbot-util
+          - utbot-core-api
           - utbot-core
-          - utbot-framework-api
-          - utbot-framework
           - utbot-fuzzers
           - utbot-gradle
           - utbot-instrumentation-tests
@@ -60,16 +60,16 @@ jobs:
           path: ${{ github.event.inputs.project-name }}/build/reports/tests/test/*
           
       - name: Upload generated tests 
-        if: ${{ always() && github.event.inputs.project-name == 'utbot-framework' }}
+        if: ${{ always() && github.event.inputs.project-name == 'utbot-core' }}
         uses: actions/upload-artifact@v3
         with:
           name: generated-tests
           path: |
             /tmp/UTBot/generated*/*
             /tmp/UTBot/utbot-childprocess-errors/*
-      - name: Upload utbot-framework logs
-        if: ${{ always() && github.event.inputs.project-name == 'utbot-framework' }}
+      - name: Upload utbot-core logs
+        if: ${{ always() && github.event.inputs.project-name == 'utbot-core' }}
         uses: actions/upload-artifact@v3
         with:
-          name: utbot-framework-logs
-          path: utbot-framework/logs/*
+          name: utbot-core-logs
+          path: utbot-core/logs/*

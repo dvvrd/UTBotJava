@@ -2,15 +2,15 @@ plugins {
     id 'java-library'
 }
 
-evaluationDependsOn(':utbot-framework')
-compileTestJava.dependsOn tasks.getByPath(':utbot-framework:testClasses')
+evaluationDependsOn(':utbot-core')
+compileTestJava.dependsOn tasks.getByPath(':utbot-core:testClasses')
 
 dependencies {
-    implementation(project(":utbot-framework"))
+    implementation(project(":utbot-core"))
     implementation(project(':utbot-instrumentation'))
     testImplementation project(':utbot-sample')
     testImplementation group: 'junit', name: 'junit', version: junit4Version
-    testImplementation project(':utbot-framework').sourceSets.test.output
+    testImplementation project(':utbot-core').sourceSets.test.output
 }
 
 test {

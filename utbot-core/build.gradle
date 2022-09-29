@@ -13,7 +13,7 @@ dependencies {
     api project(':utbot-fuzzers')
     api project(':utbot-instrumentation')
     api project(':utbot-summary')
-    api project(':utbot-framework-api')
+    api project(':utbot-core-api')
 
     implementation group: 'com.jetbrains.rd', name: 'rd-framework', version: '2022.3.1'
     implementation group: 'com.jetbrains.rd', name: 'rd-core', version: '2022.3.1'

@@ -10,7 +10,7 @@ plugins {
 }
 
 dependencies {
-    api(project(":utbot-core"))
+    api(project(":utbot-util"))
     api(project(":utbot-api"))
     implementation("com.github.UnitTestBot:soot:${sootCommitHash}")
     implementation(group = "io.github.microutils", name = "kotlin-logging", version = kotlinLoggingVersion)
