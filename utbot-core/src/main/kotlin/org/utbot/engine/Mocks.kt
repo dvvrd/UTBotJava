@@ -5,7 +5,7 @@ import org.utbot.common.packageName
 import org.utbot.engine.overrides.UtArrayMock
 import org.utbot.engine.overrides.UtLogicMock
 import org.utbot.engine.overrides.UtOverrideMock
-import org.utbot.engine.pc.UtAddrExpression
+import org.utbot.engine.UtAddrExpression
 import org.utbot.framework.plugin.api.ClassId
 import org.utbot.framework.plugin.api.FieldId
 import org.utbot.framework.plugin.api.MethodId
@@ -20,11 +20,6 @@ import kotlin.reflect.KFunction5
 import kotlinx.collections.immutable.persistentListOf
 import org.utbot.engine.util.mockListeners.MockListenerController
 import org.utbot.framework.util.isInaccessibleViaReflection
-import soot.BooleanType
-import soot.RefType
-import soot.Scene
-import soot.SootClass
-import soot.SootMethod
 
 /**
  * Generates mock with address provided.

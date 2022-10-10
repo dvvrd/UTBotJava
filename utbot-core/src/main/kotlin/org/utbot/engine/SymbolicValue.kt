@@ -1,30 +1,18 @@
 package org.utbot.engine
 
-import org.utbot.engine.pc.UtAddrExpression
-import org.utbot.engine.pc.UtExpression
-import org.utbot.engine.pc.isConcrete
-import org.utbot.engine.pc.mkBool
-import org.utbot.engine.pc.mkByte
-import org.utbot.engine.pc.mkChar
-import org.utbot.engine.pc.mkDouble
-import org.utbot.engine.pc.mkFloat
-import org.utbot.engine.pc.mkInt
-import org.utbot.engine.pc.mkLong
-import org.utbot.engine.pc.mkShort
-import org.utbot.engine.pc.toConcrete
+import org.utbot.engine.UtAddrExpression
+import org.utbot.engine.UtExpression
+import org.utbot.engine.isConcrete
+import org.utbot.engine.mkBool
+import org.utbot.engine.mkByte
+import org.utbot.engine.mkChar
+import org.utbot.engine.mkDouble
+import org.utbot.engine.mkFloat
+import org.utbot.engine.mkInt
+import org.utbot.engine.mkLong
+import org.utbot.engine.mkShort
+import org.utbot.engine.toConcrete
 import java.util.Objects
-import soot.ArrayType
-import soot.BooleanType
-import soot.ByteType
-import soot.CharType
-import soot.DoubleType
-import soot.FloatType
-import soot.IntType
-import soot.LongType
-import soot.RefType
-import soot.ShortType
-import soot.Type
-import soot.VoidType
 
 /**
  * Base class for all symbolic memory cells: primitive, reference, arrays
@@ -157,9 +145,6 @@ data class ArrayValue(
 val SymbolicValue.asPrimitiveValueOrError
     get() = (this as? PrimitiveValue)?.expr ?: error("${this::class} is not a primitive")
 
-val SymbolicValue.asWrapperOrNull
-    get() = concrete?.value as? WrapperInterface
-
 val SymbolicValue.addr
     get() = when (this) {
         is ReferenceValue -> addr
@@ -184,15 +169,15 @@ fun objectValue(type: RefType, addr: UtAddrExpression, implementation: WrapperIn
 val voidValue
     get() = PrimitiveValue(VoidType.v(), nullObjectAddr)
 
-fun UtExpression.toPrimitiveValue(type: Type) = PrimitiveValue(type, this)
-fun UtExpression.toByteValue() = this.toPrimitiveValue(ByteType.v())
-fun UtExpression.toShortValue() = this.toPrimitiveValue(ShortType.v())
-fun UtExpression.toCharValue() = this.toPrimitiveValue(CharType.v())
-fun UtExpression.toLongValue() = this.toPrimitiveValue(LongType.v())
-fun UtExpression.toIntValue() = this.toPrimitiveValue(IntType.v())
-fun UtExpression.toFloatValue() = this.toPrimitiveValue(FloatType.v())
-fun UtExpression.toDoubleValue() = this.toPrimitiveValue(DoubleType.v())
-fun UtExpression.toBoolValue() = this.toPrimitiveValue(BooleanType.v())
+fun UtExpression.toPrimitiveValue(sort: UtSort) = PrimitiveValue(sort, this)
+fun UtExpression.toByteValue() = this.toPrimitiveValue(UtByteSort)
+fun UtExpression.toShortValue() = this.toPrimitiveValue(UtShortSort)
+fun UtExpression.toCharValue() = this.toPrimitiveValue(UtCharSort)
+fun UtExpression.toLongValue() = this.toPrimitiveValue(UtLongSort)
+fun UtExpression.toIntValue() = this.toPrimitiveValue(UtInt32Sort)
+fun UtExpression.toFloatValue() = this.toPrimitiveValue(UtFloatSort)
+fun UtExpression.toDoubleValue() = this.toPrimitiveValue(UtDoubleSort)
+fun UtExpression.toBoolValue() = this.toPrimitiveValue(UtBoolSort)
 
 fun Byte.toPrimitiveValue() = mkByte(this).toByteValue()
 fun Short.toPrimitiveValue() = mkShort(this).toShortValue()

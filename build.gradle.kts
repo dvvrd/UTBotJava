@@ -129,6 +129,7 @@ configure(
         project(":utbot-util"),
         project(":utbot-core"),
         project(":utbot-core-api"),
+        project(":utbot-jimpl-interpreter"),
         project(":utbot-fuzzers"),
         project(":utbot-instrumentation"),
         project(":utbot-rd"),
