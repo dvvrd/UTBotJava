@@ -1,90 +1,37 @@
 package org.utbot.engine
 
-import org.utbot.engine.pc.UtBoolOpExpression
-import org.utbot.engine.pc.UtBoolSort
-import org.utbot.engine.pc.UtBvSort
-import org.utbot.engine.pc.UtExpression
-import org.utbot.engine.pc.UtFp32Sort
-import org.utbot.engine.pc.UtFp64Sort
-import org.utbot.engine.pc.UtIntSort
-import org.utbot.engine.pc.UtOpExpression
-import org.utbot.engine.pc.UtSort
-import org.utbot.engine.pc.alignSort
 import org.utbot.engine.z3.BinOperator
 import org.utbot.engine.z3.BoolOperator
-import kotlin.reflect.KClass
-import soot.jimple.BinopExpr
-import soot.jimple.internal.JAddExpr
-import soot.jimple.internal.JAndExpr
-import soot.jimple.internal.JCmpExpr
-import soot.jimple.internal.JCmpgExpr
-import soot.jimple.internal.JCmplExpr
-import soot.jimple.internal.JDivExpr
-import soot.jimple.internal.JEqExpr
-import soot.jimple.internal.JGeExpr
-import soot.jimple.internal.JGtExpr
-import soot.jimple.internal.JLeExpr
-import soot.jimple.internal.JLtExpr
-import soot.jimple.internal.JMulExpr
-import soot.jimple.internal.JNeExpr
-import soot.jimple.internal.JOrExpr
-import soot.jimple.internal.JRemExpr
-import soot.jimple.internal.JShlExpr
-import soot.jimple.internal.JShrExpr
-import soot.jimple.internal.JSubExpr
-import soot.jimple.internal.JUshrExpr
-import soot.jimple.internal.JXorExpr
-
-private val ops: Map<KClass<*>, UtOperator<*>> = mapOf(
-    JLeExpr::class to Le,
-    JLtExpr::class to Lt,
-    JGeExpr::class to Ge,
-    JGtExpr::class to Gt,
-    JEqExpr::class to Eq,
-    JNeExpr::class to Ne,
-    JDivExpr::class to Div,
-    JRemExpr::class to Rem,
-    JMulExpr::class to Mul,
-    JAddExpr::class to Add,
-    JSubExpr::class to Sub,
-    JShlExpr::class to Shl,
-    JShrExpr::class to Shr,
-    JUshrExpr::class to Ushr,
-    JXorExpr::class to Xor,
-    JOrExpr::class to Or,
-    JAndExpr::class to And,
-    JCmpExpr::class to Cmp,
-    JCmplExpr::class to Cmpl,
-    JCmpgExpr::class to Cmpg
-)
-
-fun doOperation(
-    sootExpression: BinopExpr,
-    left: PrimitiveValue,
-    right: PrimitiveValue
-): UtExpression =
-    ops[sootExpression::class]!!(left, right)
 
 sealed class UtOperator<T : UtExpression>(val delegate: BinOperator) {
-    abstract operator fun invoke(left: PrimitiveValue, right: PrimitiveValue): T
+    abstract operator fun invoke(left: UtExpression, right: UtExpression): T
 
     override fun toString(): String = this.javaClass.simpleName
 }
 
 sealed class UtBinOperator(
     delegate: BinOperator,
-    private val sort: (PrimitiveValue, PrimitiveValue) -> UtSort = ::maxSort
+    private val sort: (UtExpression, UtExpression) -> UtSort = ::maxSort
 ) : UtOperator<UtOpExpression>(delegate) {
-    override operator fun invoke(left: PrimitiveValue, right: PrimitiveValue): UtOpExpression =
+    override operator fun invoke(left: UtExpression, right: UtExpression): UtOpExpression =
         UtOpExpression(this, left, right, sort(left, right))
+
+    operator fun <Type> invoke(left: PrimitiveValue<Type>, right: PrimitiveValue<Type>): UtOpExpression =
+        UtOpExpression(this, left.expr, right.expr, sort(left.expr, right.expr))
 }
 
 sealed class UtBoolOperator(delegate: BoolOperator) : UtOperator<UtBoolOpExpression>(delegate) {
-    override operator fun invoke(left: PrimitiveValue, right: PrimitiveValue): UtBoolOpExpression =
+    override operator fun invoke(left: UtExpression, right: UtExpression): UtBoolOpExpression =
         UtBoolOpExpression(this, left, right)
 
-    operator fun invoke(left: PrimitiveValue, right: Int): UtBoolOpExpression =
-        UtBoolOpExpression(this, left, right.toPrimitiveValue())
+    operator fun invoke(left: UtExpression, right: Int): UtBoolOpExpression =
+        UtBoolOpExpression(this, left, mkInt(right))
+
+    operator fun <Type> invoke(left: PrimitiveValue<Type>, right: PrimitiveValue<Type>): UtBoolOpExpression =
+        UtBoolOpExpression(this, left.expr, right.expr)
+
+    operator fun <Type> invoke(left: PrimitiveValue<Type>, right: Int): UtBoolOpExpression =
+        UtBoolOpExpression(this, left.expr, mkInt(right))
 }
 
 object Le : UtBoolOperator(org.utbot.engine.z3.Le)
@@ -118,18 +65,18 @@ object Cmp : UtBinOperator(org.utbot.engine.z3.Cmp, ::intSort)
 object Cmpl : UtBinOperator(org.utbot.engine.z3.Cmpl, ::intSort)
 object Cmpg : UtBinOperator(org.utbot.engine.z3.Cmpg, ::intSort)
 
-fun maxSort(left: PrimitiveValue, right: PrimitiveValue) =
-    maxOf(left.expr.sort, right.expr.sort, UtIntSort, compareBy { it.rank() })
+fun maxSort(left: UtExpression, right: UtExpression) =
+    maxOf(left.sort, right.sort, UtIntSort, compareBy { it.rank() })
 
 // Straight-forward maxSort when we don't want UtIntSort to be lesser limit
-fun simpleMaxSort(left: PrimitiveValue, right: PrimitiveValue) =
-    maxOf(left.expr.sort, right.expr.sort, compareBy { it.rank() })
+fun simpleMaxSort(left: UtExpression, right: UtExpression) =
+    maxOf(left.sort, right.sort, compareBy { it.rank() })
 
 @Suppress("UNUSED_PARAMETER")
-private fun leftOperandType(left: PrimitiveValue, right: PrimitiveValue) = alignSort(left.expr.sort)
+private fun leftOperandType(left: UtExpression, right: UtExpression) = alignSort(left.sort)
 
 @Suppress("UNUSED_PARAMETER")
-private fun intSort(left: PrimitiveValue, right: PrimitiveValue) = UtIntSort
+private fun intSort(left: UtExpression, right: UtExpression) = UtIntSort
 
 /**
  * Calculates a rank for UtSort to use as a comparator.

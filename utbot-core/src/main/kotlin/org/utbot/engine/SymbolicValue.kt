@@ -1,40 +1,55 @@
 package org.utbot.engine
 
-import org.utbot.engine.pc.UtAddrExpression
-import org.utbot.engine.pc.UtExpression
-import org.utbot.engine.pc.isConcrete
-import org.utbot.engine.pc.mkBool
-import org.utbot.engine.pc.mkByte
-import org.utbot.engine.pc.mkChar
-import org.utbot.engine.pc.mkDouble
-import org.utbot.engine.pc.mkFloat
-import org.utbot.engine.pc.mkInt
-import org.utbot.engine.pc.mkLong
-import org.utbot.engine.pc.mkShort
-import org.utbot.engine.pc.toConcrete
+import org.utbot.framework.plugin.api.SYMBOLIC_NULL_ADDR
 import java.util.Objects
-import soot.ArrayType
-import soot.BooleanType
-import soot.ByteType
-import soot.CharType
-import soot.DoubleType
-import soot.FloatType
-import soot.IntType
-import soot.LongType
-import soot.RefType
-import soot.ShortType
-import soot.Type
-import soot.VoidType
+
+/**
+ * Keeps most common type and possible types, to resolve types in uncertain situations, like virtual invokes.
+ *
+ * Note: [leastCommonType] might be an interface or abstract type in opposite to the [possibleConcreteTypes]
+ * that **usually** contains only concrete types (so-called appropriate). The only way to create [TypeStorage] with
+ * inappropriate possibleType is to create it using constructor with the only type.
+ *
+ * @see isAppropriate
+ */
+data class TypeStorage<out Type>(val leastCommonType: Type, val possibleConcreteTypes: Set<Type>) {
+    private val hashCode = Objects.hash(leastCommonType, possibleConcreteTypes)
+
+/**
+     * Construct a type storage with some type. In this case [possibleConcreteTypes] might contains
+     * abstract class or interface. Usually it means such typeStorage represents wrapper object type.
+     */
+    constructor(concreteType: Type) : this(concreteType, setOf(concreteType))
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as TypeStorage<*>
+
+        if (leastCommonType != other.leastCommonType) return false
+        if (possibleConcreteTypes != other.possibleConcreteTypes) return false
+
+        return true
+    }
+
+    override fun hashCode() = hashCode
+
+    override fun toString() = if (possibleConcreteTypes.size == 1) {
+        "$leastCommonType"
+    } else {
+        "(leastCommonType=$leastCommonType, ${possibleConcreteTypes.size} possibleTypes=${possibleConcreteTypes.take(10)})"
+    }
+}
 
 /**
  * Base class for all symbolic memory cells: primitive, reference, arrays
  */
-sealed class SymbolicValue {
+sealed class SymbolicValue<out Type> {
     abstract val concrete: Concrete?
-    abstract val typeStorage: TypeStorage
+    // TODO: replace with type
     abstract val type: Type
     abstract val hashCode: Int
-    val possibleConcreteTypes get() = typeStorage.possibleConcreteTypes
 }
 
 /**
@@ -46,26 +61,23 @@ data class Concrete(val value: Any?)
 /**
  * Memory cell that contains primitive value as the result
  */
-data class PrimitiveValue(
-    override val typeStorage: TypeStorage,
+data class PrimitiveValue<out Type>(
+    override val type: Type,
     val expr: UtExpression,
     override val concrete: Concrete? = null
-) : SymbolicValue() {
-    constructor(type: Type, expr: UtExpression) : this(TypeStorage(type), expr)
+) : SymbolicValue<Type>() {
 
-    override val type get() = typeStorage.leastCommonType
+    override val hashCode = Objects.hash(expr, concrete)
 
-    override val hashCode = Objects.hash(typeStorage, expr, concrete)
-
-    override fun toString() = "($type $expr)"
+    override fun toString() = "($expr.sort $expr)"
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as PrimitiveValue
+        other as PrimitiveValue<*>
 
-        if (typeStorage != other.typeStorage) return false
+        if (type != other.type) return false
         if (expr != other.expr) return false
         if (concrete != other.concrete) return false
 
@@ -78,7 +90,13 @@ data class PrimitiveValue(
 /**
  * Memory cell that can contain any reference value: array or object
  */
-sealed class ReferenceValue(open val addr: UtAddrExpression) : SymbolicValue()
+sealed class ReferenceValue<out Type>(
+    open val typeStorage: TypeStorage<Type>,
+    open val addr: UtAddrExpression) : SymbolicValue<Type>() {
+
+    override val type: Type get() = typeStorage.leastCommonType
+    val possibleConcreteTypes get() = typeStorage.possibleConcreteTypes
+}
 
 
 /**
@@ -90,12 +108,11 @@ sealed class ReferenceValue(open val addr: UtAddrExpression) : SymbolicValue()
  * @see TypeRegistry.typeConstraint
  * @see Traverser.createObject
  */
-data class ObjectValue(
-    override val typeStorage: TypeStorage,
+data class ObjectValue<out Type>(
+    override val typeStorage: TypeStorage<Type>,
     override val addr: UtAddrExpression,
     override val concrete: Concrete? = null
-) : ReferenceValue(addr) {
-    override val type: RefType get() = typeStorage.leastCommonType as RefType
+) : ReferenceValue<Type>(typeStorage, addr) {
 
     override val hashCode = Objects.hash(typeStorage, addr, concrete)
 
@@ -103,7 +120,7 @@ data class ObjectValue(
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as ObjectValue
+        other as ObjectValue<*>
 
         if (typeStorage != other.typeStorage) return false
         if (addr != other.addr) return false
@@ -129,12 +146,11 @@ data class ObjectValue(
  * @see TypeRegistry.typeConstraint
  * @see Traverser.createObject
  */
-data class ArrayValue(
-    override val typeStorage: TypeStorage,
+data class ArrayValue<out Type>(
+    override val typeStorage: TypeStorage<Type>,
     override val addr: UtAddrExpression,
     override val concrete: Concrete? = null
-) : ReferenceValue(addr) {
-    override val type get() = typeStorage.leastCommonType as ArrayType
+) : ReferenceValue<Type>(typeStorage, addr) {
 
     override val hashCode = Objects.hash(typeStorage, addr, concrete)
 
@@ -142,7 +158,7 @@ data class ArrayValue(
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as ArrayValue
+        other as ArrayValue<*>
 
         if (typeStorage != other.typeStorage) return false
         if (addr != other.addr) return false
@@ -154,52 +170,55 @@ data class ArrayValue(
     override fun hashCode() = hashCode
 }
 
-val SymbolicValue.asPrimitiveValueOrError
-    get() = (this as? PrimitiveValue)?.expr ?: error("${this::class} is not a primitive")
+val <Type> SymbolicValue<Type>.asPrimitiveValueOrError
+    get() = (this as? PrimitiveValue<Type>)?.expr ?: error("${this::class} is not a primitive")
 
-val SymbolicValue.asWrapperOrNull
-    get() = concrete?.value as? WrapperInterface
-
-val SymbolicValue.addr
+val <Type> SymbolicValue<Type>.addr
     get() = when (this) {
-        is ReferenceValue -> addr
-        is PrimitiveValue -> error("PrimitiveValue $this doesn't have an address")
+        is ReferenceValue<*> -> addr
+        is PrimitiveValue<Type> -> error("PrimitiveValue $this doesn't have an address")
     }
 
-val SymbolicValue.isConcrete: Boolean
+val <Type> SymbolicValue<Type>.isConcrete: Boolean
     get() = when (this) {
-        is PrimitiveValue -> this.expr.isConcrete
-        is ArrayValue, is ObjectValue -> false
+        is PrimitiveValue<Type> -> this.expr.isConcrete
+        else -> false
     }
 
-fun SymbolicValue.toConcrete(): Any = when (this) {
-        is PrimitiveValue -> this.expr.toConcrete()
-        is ArrayValue, is ObjectValue -> error("Can't get concrete value for $this")
+fun <Type> SymbolicValue<Type>.toConcrete(): Any = when (this) {
+        is PrimitiveValue<Type> -> this.expr.toConcrete()
+        else -> error("Can't get concrete value for $this")
     }
 
-// TODO: one more constructor?
-fun objectValue(type: RefType, addr: UtAddrExpression, implementation: WrapperInterface) =
-    ObjectValue(TypeStorage(type), addr, Concrete(implementation))
+val nullObjectAddr = UtAddrExpression(mkInt(SYMBOLIC_NULL_ADDR))
 
-val voidValue
-    get() = PrimitiveValue(VoidType.v(), nullObjectAddr)
+fun Any?.primitiveToLiteral() = when (this) {
+    null -> nullObjectAddr
+    is Byte -> mkByte(this)
+    is Short -> mkShort(this)
+    is Char -> mkChar(this)
+    is Int -> mkInt(this)
+    is Long -> mkLong(this)
+    is Float -> mkFloat(this)
+    is Double -> mkDouble(this)
+    is Boolean -> mkBool(this)
+    else -> error("Unknown class: ${this::class} to convert to Literal")
+}
 
-fun UtExpression.toPrimitiveValue(type: Type) = PrimitiveValue(type, this)
-fun UtExpression.toByteValue() = this.toPrimitiveValue(ByteType.v())
-fun UtExpression.toShortValue() = this.toPrimitiveValue(ShortType.v())
-fun UtExpression.toCharValue() = this.toPrimitiveValue(CharType.v())
-fun UtExpression.toLongValue() = this.toPrimitiveValue(LongType.v())
-fun UtExpression.toIntValue() = this.toPrimitiveValue(IntType.v())
-fun UtExpression.toFloatValue() = this.toPrimitiveValue(FloatType.v())
-fun UtExpression.toDoubleValue() = this.toPrimitiveValue(DoubleType.v())
-fun UtExpression.toBoolValue() = this.toPrimitiveValue(BooleanType.v())
+val UtSort.defaultValue: UtExpression
+    get() = when (this) {
+        UtByteSort -> mkByte(0)
+        UtShortSort -> mkShort(0)
+        UtCharSort -> mkChar(0)
+        UtIntSort -> mkInt(0)
+        UtLongSort -> mkLong(0L)
+        UtFp32Sort -> mkFloat(0f)
+        UtFp64Sort -> mkDouble(0.0)
+        UtBoolSort -> mkBool(false)
+        // empty string because we want to have a default value of the same sort as the items stored in the strings array
+        UtSeqSort -> mkString("")
+        is UtArraySort -> if (itemSort is UtArraySort) nullObjectAddr else mkArrayWithConst(this, itemSort.defaultValue)
+        else -> nullObjectAddr
+    }
 
-fun Byte.toPrimitiveValue() = mkByte(this).toByteValue()
-fun Short.toPrimitiveValue() = mkShort(this).toShortValue()
-fun Char.toPrimitiveValue() = mkChar(this).toCharValue()
-fun Int.toPrimitiveValue() = mkInt(this).toIntValue()
-fun Long.toPrimitiveValue() = mkLong(this).toLongValue()
-fun Float.toPrimitiveValue() = mkFloat(this).toFloatValue()
-fun Double.toPrimitiveValue() = mkDouble(this).toDoubleValue()
-fun Boolean.toPrimitiveValue() = mkBool(this).toBoolValue()
-
+internal const val MAX_STRING_LENGTH_SIZE_BITS = 8

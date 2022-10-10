@@ -1,7 +1,5 @@
 package org.utbot.engine.z3
 
-import org.utbot.engine.pc.Z3Variable
-import org.utbot.engine.pc.z3Variable
 import com.microsoft.z3.BitVecExpr
 import com.microsoft.z3.BitVecNum
 import com.microsoft.z3.BitVecSort
@@ -17,20 +15,11 @@ import com.microsoft.z3.Sort
 import com.microsoft.z3.enumerations.Z3_lbool
 import com.microsoft.z3.toFloatingPointNum
 import com.microsoft.z3.toIntNum
+import org.utbot.engine.*
 import java.lang.Integer.parseInt
-import soot.BooleanType
-import soot.ByteType
-import soot.CharType
-import soot.DoubleType
-import soot.FloatType
-import soot.IntType
-import soot.LongType
-import soot.RefType
-import soot.ShortType
-import soot.Type
 
 private val Z3Variable.unsigned: Boolean
-    get() = this.type is CharType
+    get() = this.sort is UtCharSort
 
 fun Expr.value(unsigned: Boolean = false): Any = when (this) {
     is BitVecNum -> this.toIntNum(unsigned)
@@ -40,7 +29,7 @@ fun Expr.value(unsigned: Boolean = false): Any = when (this) {
     else -> error("${this::class}: $this")
 }
 
-internal fun Expr.intValue() = this.value() as Int
+fun Expr.intValue() = this.value() as Int
 
 /**
  * Converts a variable to given type.
@@ -51,12 +40,12 @@ internal fun Expr.intValue() = this.value() as Int
  *
  * @throws IllegalStateException if given expression cannot be convert to given sort
  */
-fun Context.convertVar(variable: Z3Variable, toType: Type): Z3Variable {
-    if (toType == variable.type) return variable
-    if (variable.type is ByteType && toType is CharType) {
-        return convertVar(convertVar(variable, IntType.v()), toType)
+fun Context.convertVar(variable: Z3Variable, toSort: UtSort): Z3Variable {
+    if (toSort == variable.sort) return variable
+    if (variable.sort is UtByteSort && toSort is UtCharSort) {
+        return convertVar(convertVar(variable, UtIntSort), toSort)
     }
-    return convertVar(variable, toSort(toType)).z3Variable(toType)
+    return convertVar(variable, toSort(toSort)).z3Variable(toSort)
 }
 
 /**
@@ -150,18 +139,18 @@ fun Context.makeFP(const: Number, sort: FPSort): FPExpr = when (const) {
     else -> error("Wrong type ${const::class}")
 }
 
-fun Context.toSort(type: Type): Sort =
-    when (type) {
-        is ByteType -> mkBitVecSort(Byte.SIZE_BITS)
-        is ShortType -> mkBitVecSort(Short.SIZE_BITS)
-        is CharType -> mkBitVecSort(Char.SIZE_BITS)
-        is IntType -> mkBitVecSort(Int.SIZE_BITS)
-        is LongType -> mkBitVecSort(Long.SIZE_BITS)
-        is FloatType -> mkFPSort32()
-        is DoubleType -> mkFPSort64()
-        is BooleanType -> mkBoolSort()
-        is RefType -> mkBitVecSort(Int.SIZE_BITS)
-        else -> error("${type::class} sort is not implemented")
+fun Context.toSort(sort: UtSort): Sort =
+    when (sort) {
+        is UtByteSort -> mkBitVecSort(Byte.SIZE_BITS)
+        is UtShortSort -> mkBitVecSort(Short.SIZE_BITS)
+        is UtCharSort -> mkBitVecSort(Char.SIZE_BITS)
+        is UtIntSort -> mkBitVecSort(Int.SIZE_BITS)
+        is UtLongSort -> mkBitVecSort(Long.SIZE_BITS)
+        is UtFloatSort -> mkFPSort32()
+        is UtDoubleSort -> mkFPSort64()
+        is UtBoolSort -> mkBoolSort()
+        UtAddrSort -> mkBitVecSort(Int.SIZE_BITS)
+        else -> error("${sort} sort is not implemented")
     }
 
 fun convertSolverString(s: String) = buildString(s.length) {

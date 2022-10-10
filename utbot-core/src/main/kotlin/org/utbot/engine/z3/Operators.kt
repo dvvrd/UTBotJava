@@ -1,6 +1,6 @@
 package org.utbot.engine.z3
 
-import org.utbot.engine.pc.Z3Variable
+import org.utbot.engine.Z3Variable
 import com.microsoft.z3.BitVecExpr
 import com.microsoft.z3.BitVecSort
 import com.microsoft.z3.BoolExpr
@@ -10,10 +10,10 @@ import com.microsoft.z3.Expr
 import com.microsoft.z3.FPExpr
 import com.microsoft.z3.FPSort
 import com.microsoft.z3.Sort
-import soot.ByteType
-import soot.CharType
-import soot.IntType
-import soot.ShortType
+import org.utbot.engine.UtByteSort
+import org.utbot.engine.UtIntSort
+import org.utbot.engine.UtShortSort
+import org.utbot.engine.UtCharSort
 
 typealias BinOperator = Operator<out Expr>
 
@@ -210,8 +210,8 @@ internal fun Context.alignVarAndConst(left: Z3Variable, right: Number): Pair<Exp
  * @see <a href="https://docs.oracle.com/javase/specs/jls/se11/html/jls-5.html#jls-5.6.1">
  * Java Language Specification: Unary Numeric Promotion</a>
  */
-fun Context.alignVar(variable: Z3Variable): Z3Variable = when (variable.type) {
-    is ByteType, is ShortType, is CharType -> convertVar(variable, IntType.v())
+fun Context.alignVar(variable: Z3Variable): Z3Variable = when (variable.sort) {
+    is UtByteSort, is UtShortSort, is UtCharSort -> convertVar(variable, UtIntSort)
     else -> variable
 }
 
