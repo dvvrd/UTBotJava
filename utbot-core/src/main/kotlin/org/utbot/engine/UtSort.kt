@@ -57,29 +57,11 @@ object UtCharSort   : UtBvSort(Char     .SIZE_BITS) // the same size as short
 object UtFloatSort   : UtBvSort(Float   .SIZE_BITS)
 object UtDoubleSort   : UtBvSort(Double .SIZE_BITS)
 
+object UtVoidSort   : UtBvSort(0)
+
 val UtInt32Sort = UtIntSort
 val UtAddrSort = UtInt32Sort //maybe int64 in future
 
-
-//fun Type.toSort(): UtSort = when (this) {
-//    is ByteType     -> UtByteSort
-//    is CharType     -> UtCharSort
-//    is ShortType    -> UtShortSort
-//    is IntType      -> UtIntSort
-//    is LongType     -> UtLongSort
-//
-//    is FloatType    -> UtFp32Sort
-//    is DoubleType   -> UtFp64Sort
-//
-//    is BooleanType  -> UtBoolSort
-//
-//    is SeqType      -> UtSeqSort
-//
-//    is ArrayType -> if (numDimensions == 1) UtArraySort(UtAddrSort, elementType.toSort()) else UtArraySort(UtAddrSort, UtAddrSort)
-//    is RefType -> UtAddrSort
-//
-//    else -> error("${this::class} sort is not implemented")
-//}
 ////@formatter:on
 
 

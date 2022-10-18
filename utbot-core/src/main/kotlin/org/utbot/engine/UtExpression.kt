@@ -632,7 +632,7 @@ data class UtSubNoOverflowExpression(
     override fun hashCode() = hashCode
 }
 
-data class UtNegExpression(val variable: PrimitiveValue) : UtExpression(alignSort(variable.type.toSort())) {
+data class UtNegExpression(val variable: PrimitiveValue) : UtExpression(alignSort(variable.sort)) {
     override val hashCode = variable.hashCode
 
     override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult = visitor.visit(this)

@@ -1,4 +1,4 @@
-package org.utbot.engine
+package org.utbot.engine.typed
 
 import org.utbot.common.WorkaroundReason
 import org.utbot.common.workaround

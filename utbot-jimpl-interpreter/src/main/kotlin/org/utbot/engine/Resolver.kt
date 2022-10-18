@@ -102,7 +102,6 @@ internal const val MIN_PREFERRED_INTEGER = -256
 internal const val MAX_PREFERRED_INTEGER = 256
 internal const val MIN_PREFERRED_CHARACTER = 32
 internal const val MAX_PREFERRED_CHARACTER = 127
-internal const val MAX_STRING_LENGTH_SIZE_BITS = 8
 internal const val MAX_NUM_DIMENSIONS = 4
 internal const val MIN_ARRAY_SIZE = 0
 
@@ -1019,41 +1018,12 @@ private data class ArrayExtractionDetails(
     val oneDimensionalArray: UtArrayExpressionBase
 )
 
-internal val nullObjectAddr = UtAddrExpression(mkInt(SYMBOLIC_NULL_ADDR))
-
 
 fun SymbolicValue.isNullObject() =
     when (this) {
         is ReferenceValue -> addr == nullObjectAddr
         is PrimitiveValue -> false
     }
-
-fun Any?.primitiveToLiteral() = when (this) {
-    null -> nullObjectAddr
-    is Byte -> mkByte(this)
-    is Short -> mkShort(this)
-    is Char -> mkChar(this)
-    is Int -> mkInt(this)
-    is Long -> mkLong(this)
-    is Float -> mkFloat(this)
-    is Double -> mkDouble(this)
-    is Boolean -> mkBool(this)
-    else -> error("Unknown class: ${this::class} to convert to Literal")
-}
-
-fun Any?.primitiveToSymbolic() = when (this) {
-    null -> nullObjectAddr.toIntValue()
-    is Byte -> this.toPrimitiveValue()
-    is Short -> this.toPrimitiveValue()
-    is Char -> this.toPrimitiveValue()
-    is Int -> this.toPrimitiveValue()
-    is Long -> this.toPrimitiveValue()
-    is Float -> this.toPrimitiveValue()
-    is Double -> this.toPrimitiveValue()
-    is Boolean -> this.toPrimitiveValue()
-    is Unit -> voidValue
-    else -> error("Unknown class: ${this::class} to convert to PrimitiveValue")
-}
 
 val typesOfObjectsToRecreate = listOf(
     "java.lang.CharacterDataLatin1",

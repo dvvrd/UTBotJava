@@ -3,7 +3,7 @@ package org.utbot.framework.plugin.api
 import java.io.File
 import java.util.LinkedList
 
-sealed class UtExecutionResult
+sealed class    UtExecutionResult
 
 data class UtExecutionSuccess(val model: UtModel) : UtExecutionResult() {
     override fun toString() = "$model"

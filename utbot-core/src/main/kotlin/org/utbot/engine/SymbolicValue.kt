@@ -1,17 +1,6 @@
 package org.utbot.engine
 
-import org.utbot.engine.UtAddrExpression
-import org.utbot.engine.UtExpression
-import org.utbot.engine.isConcrete
-import org.utbot.engine.mkBool
-import org.utbot.engine.mkByte
-import org.utbot.engine.mkChar
-import org.utbot.engine.mkDouble
-import org.utbot.engine.mkFloat
-import org.utbot.engine.mkInt
-import org.utbot.engine.mkLong
-import org.utbot.engine.mkShort
-import org.utbot.engine.toConcrete
+import org.utbot.framework.plugin.api.SYMBOLIC_NULL_ADDR
 import java.util.Objects
 
 /**
@@ -19,10 +8,8 @@ import java.util.Objects
  */
 sealed class SymbolicValue {
     abstract val concrete: Concrete?
-    abstract val typeStorage: TypeStorage
-    abstract val type: Type
+    abstract val sort: UtSort
     abstract val hashCode: Int
-    val possibleConcreteTypes get() = typeStorage.possibleConcreteTypes
 }
 
 /**
@@ -35,17 +22,14 @@ data class Concrete(val value: Any?)
  * Memory cell that contains primitive value as the result
  */
 data class PrimitiveValue(
-    override val typeStorage: TypeStorage,
+    override val sort: UtPrimitiveSort,
     val expr: UtExpression,
     override val concrete: Concrete? = null
 ) : SymbolicValue() {
-    constructor(type: Type, expr: UtExpression) : this(TypeStorage(type), expr)
 
-    override val type get() = typeStorage.leastCommonType
+    override val hashCode = Objects.hash(sort, expr, concrete)
 
-    override val hashCode = Objects.hash(typeStorage, expr, concrete)
-
-    override fun toString() = "($type $expr)"
+    override fun toString() = "($sort $expr)"
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -53,7 +37,7 @@ data class PrimitiveValue(
 
         other as PrimitiveValue
 
-        if (typeStorage != other.typeStorage) return false
+        if (sort != other.sort) return false
         if (expr != other.expr) return false
         if (concrete != other.concrete) return false
 
@@ -71,21 +55,14 @@ sealed class ReferenceValue(open val addr: UtAddrExpression) : SymbolicValue()
 
 /**
  * Memory cell contains ordinal objects (not arrays).
- *
- * Note: if you create an object, be sure you add constraints for its type using [TypeConstraint],
- * otherwise it is possible for an object to have inappropriate or incorrect typeId and dimensionNum.
- *
- * @see TypeRegistry.typeConstraint
- * @see Traverser.createObject
  */
-data class ObjectValue(
-    override val typeStorage: TypeStorage,
-    override val addr: UtAddrExpression,
-    override val concrete: Concrete? = null
+open class ObjectValue(
+    final override val addr: UtAddrExpression,
+    final override val concrete: Concrete? = null
 ) : ReferenceValue(addr) {
-    override val type: RefType get() = typeStorage.leastCommonType as RefType
+    override val hashCode = Objects.hash(addr, concrete)
 
-    override val hashCode = Objects.hash(typeStorage, addr, concrete)
+    override val sort: UtSort = UtAddrSort
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -93,7 +70,6 @@ data class ObjectValue(
 
         other as ObjectValue
 
-        if (typeStorage != other.typeStorage) return false
         if (addr != other.addr) return false
         if (concrete != other.concrete) return false
 
@@ -102,7 +78,7 @@ data class ObjectValue(
 
     override fun hashCode() = hashCode
 
-    override fun toString() = "ObjectValue(typeStorage=$typeStorage, addr=$addr${concretePart()})"
+    override fun toString() = "ObjectValue(addr=$addr${concretePart()})"
 
     private fun concretePart() = concrete?.let { ", concrete=$concrete" } ?: ""
 }
@@ -110,21 +86,14 @@ data class ObjectValue(
 
 /**
  * Memory cell contains java arrays.
- *
- * Note: if you create an array, be sure you add constraints for its type using [TypeConstraint],
- * otherwise it is possible for an object to have inappropriate or incorrect typeId and dimensionNum.
- *
- * @see TypeRegistry.typeConstraint
- * @see Traverser.createObject
  */
-data class ArrayValue(
-    override val typeStorage: TypeStorage,
-    override val addr: UtAddrExpression,
-    override val concrete: Concrete? = null
+open class ArrayValue(
+    final override val addr: UtAddrExpression,
+    final override val concrete: Concrete? = null
 ) : ReferenceValue(addr) {
-    override val type get() = typeStorage.leastCommonType as ArrayType
+    override val sort get() = UtAddrSort
 
-    override val hashCode = Objects.hash(typeStorage, addr, concrete)
+    override val hashCode = Objects.hash(addr, concrete)
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -132,7 +101,6 @@ data class ArrayValue(
 
         other as ArrayValue
 
-        if (typeStorage != other.typeStorage) return false
         if (addr != other.addr) return false
         if (concrete != other.concrete) return false
 
@@ -162,14 +130,7 @@ fun SymbolicValue.toConcrete(): Any = when (this) {
         is ArrayValue, is ObjectValue -> error("Can't get concrete value for $this")
     }
 
-// TODO: one more constructor?
-fun objectValue(type: RefType, addr: UtAddrExpression, implementation: WrapperInterface) =
-    ObjectValue(TypeStorage(type), addr, Concrete(implementation))
-
-val voidValue
-    get() = PrimitiveValue(VoidType.v(), nullObjectAddr)
-
-fun UtExpression.toPrimitiveValue(sort: UtSort) = PrimitiveValue(sort, this)
+fun UtExpression.toPrimitiveValue(sort: UtPrimitiveSort) = PrimitiveValue(sort, this)
 fun UtExpression.toByteValue() = this.toPrimitiveValue(UtByteSort)
 fun UtExpression.toShortValue() = this.toPrimitiveValue(UtShortSort)
 fun UtExpression.toCharValue() = this.toPrimitiveValue(UtCharSort)
@@ -188,3 +149,35 @@ fun Float.toPrimitiveValue() = mkFloat(this).toFloatValue()
 fun Double.toPrimitiveValue() = mkDouble(this).toDoubleValue()
 fun Boolean.toPrimitiveValue() = mkBool(this).toBoolValue()
 
+
+val nullObjectAddr = UtAddrExpression(mkInt(SYMBOLIC_NULL_ADDR))
+
+val voidValue
+    get() = PrimitiveValue(UtVoidSort, nullObjectAddr)
+
+fun Any?.primitiveToLiteral() = when (this) {
+    null -> nullObjectAddr
+    is Byte -> mkByte(this)
+    is Short -> mkShort(this)
+    is Char -> mkChar(this)
+    is Int -> mkInt(this)
+    is Long -> mkLong(this)
+    is Float -> mkFloat(this)
+    is Double -> mkDouble(this)
+    is Boolean -> mkBool(this)
+    else -> error("Unknown class: ${this::class} to convert to Literal")
+}
+
+fun Any?.primitiveToSymbolic() = when (this) {
+    null -> nullObjectAddr.toIntValue()
+    is Byte -> this.toPrimitiveValue()
+    is Short -> this.toPrimitiveValue()
+    is Char -> this.toPrimitiveValue()
+    is Int -> this.toPrimitiveValue()
+    is Long -> this.toPrimitiveValue()
+    is Float -> this.toPrimitiveValue()
+    is Double -> this.toPrimitiveValue()
+    is Boolean -> this.toPrimitiveValue()
+    is Unit -> voidValue
+    else -> error("Unknown class: ${this::class} to convert to PrimitiveValue")
+}

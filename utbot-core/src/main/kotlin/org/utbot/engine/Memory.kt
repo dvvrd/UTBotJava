@@ -75,46 +75,39 @@ data class InstanceFieldReadOperation(val addr: UtAddrExpression, val fieldId: F
  * @see memoryForNestedMethod
  * @see FieldStates
  */
-data class Memory( // TODO: split purely symbolic memory and information about symbolic variables mapping
-    private val initial: PersistentMap<ChunkId, UtArrayExpressionBase> = persistentHashMapOf(),
-    private val current: PersistentMap<ChunkId, UtArrayExpressionBase> = persistentHashMapOf(),
-    private val staticInitial: PersistentMap<FieldId, PersistentMap<ChunkId, UtArrayExpressionBase>> = persistentHashMapOf(),
-    private val concrete: PersistentMap<UtAddrExpression, Concrete> = persistentHashMapOf(),
-    private val mockInfos: PersistentList<MockInfoEnriched> = persistentListOf(),
-    private val staticInstanceStorage: PersistentMap<ClassId, ObjectValue> = persistentHashMapOf(),
-    private val initializedStaticFields: PersistentSet<FieldId> = persistentHashSetOf(),
-    private val staticFieldsStates: PersistentMap<FieldId, FieldStates> = persistentHashMapOf(),
-    private val meaningfulStaticFields: PersistentSet<FieldId> = persistentHashSetOf(),
-    private val addrToArrayType: PersistentMap<UtAddrExpression, ArrayType> = persistentHashMapOf(),
-    private val addrToMockInfo: PersistentMap<UtAddrExpression, UtMockInfo> = persistentHashMapOf(),
-    private val updates: MemoryUpdate = MemoryUpdate(), // TODO: refactor this later. Now we use it only for statics substitution
-    private val visitedValues: UtArrayExpressionBase = UtConstArrayExpression(
+open class Memory( // TODO: split purely symbolic memory and information about symbolic variables mapping
+    protected val initial: PersistentMap<ChunkId, UtArrayExpressionBase> = persistentHashMapOf(),
+    protected val current: PersistentMap<ChunkId, UtArrayExpressionBase> = persistentHashMapOf(),
+    protected val staticInitial: PersistentMap<FieldId, PersistentMap<ChunkId, UtArrayExpressionBase>> = persistentHashMapOf(),
+    protected val concrete: PersistentMap<UtAddrExpression, Concrete> = persistentHashMapOf(),
+    protected val staticInstanceStorage: PersistentMap<ClassId, ObjectValue> = persistentHashMapOf(),
+    protected val initializedStaticFields: PersistentSet<FieldId> = persistentHashSetOf(),
+    protected val staticFieldsStates: PersistentMap<FieldId, FieldStates> = persistentHashMapOf(),
+    protected val meaningfulStaticFields: PersistentSet<FieldId> = persistentHashSetOf(),
+    protected val updates: MemoryUpdate = MemoryUpdate(), // TODO: refactor this later. Now we use it only for statics substitution
+    protected val visitedValues: UtArrayExpressionBase = UtConstArrayExpression(
         mkInt(0),
         UtArraySort(UtAddrSort, UtIntSort)
     ),
-    private val touchedAddresses: UtArrayExpressionBase = UtConstArrayExpression(
+    protected val touchedAddresses: UtArrayExpressionBase = UtConstArrayExpression(
         UtFalse,
         UtArraySort(UtAddrSort, UtBoolSort)
     ),
-    private val instanceFieldReadOperations: PersistentSet<InstanceFieldReadOperation> = persistentHashSetOf(),
+    protected val instanceFieldReadOperations: PersistentSet<InstanceFieldReadOperation> = persistentHashSetOf(),
 
     /**
      * Storage for addresses that we speculatively consider non-nullable (e.g., final fields of system classes).
      * See [org.utbot.engine.UtBotSymbolicEngine.createFieldOrMock] for usage,
      * and [docs/SpeculativeFieldNonNullability.md] for details.
      */
-    private val speculativelyNotNullAddresses: UtArrayExpressionBase = UtConstArrayExpression(
+    protected val speculativelyNotNullAddresses: UtArrayExpressionBase = UtConstArrayExpression(
         UtFalse,
         UtArraySort(UtAddrSort, UtBoolSort)
     ),
-    private val symbolicEnumValues: PersistentList<ObjectValue> = persistentListOf()
+    protected val symbolicEnumValues: PersistentList<ObjectValue> = persistentListOf()
 ) {
     val chunkIds: Set<ChunkId>
         get() = initial.keys
-
-    fun mockInfoByAddr(addr: UtAddrExpression): UtMockInfo? = addrToMockInfo[addr]
-
-    fun mocks(): List<MockInfoEnriched> = mockInfos
 
     fun staticFields(): Map<FieldId, FieldStates> = staticFieldsStates.filterKeys { it in meaningfulStaticFields }
 
@@ -170,102 +163,32 @@ data class Memory( // TODO: split purely symbolic memory and information about s
             STATIC_INITIAL -> staticInitial[staticFieldId!!]?.get(chunkDescriptor.id)
         } ?: initialArray(chunkDescriptor)
 
-    fun update(update: MemoryUpdate): Memory {
-        var updInitial = initial
-        var updCurrent = current
-        update.touchedChunkDescriptors
-            .filterNot { it.id in updCurrent }
-            .forEach { chunk ->
-                val array = initialArray(chunk)
-                updInitial = updInitial.put(chunk.id, array)
-                updCurrent = updCurrent.put(chunk.id, array)
-            }
-        // TODO: collect updates for one array
-        update.stores.forEach { (descriptor, index, value) ->
-            val array = updCurrent[descriptor.id] ?: initialArray(descriptor)
-            val nextArray = array.store(index, value)
-            updCurrent = updCurrent.put(descriptor.id, nextArray)
-        }
-
-        val initialMemoryStates = mutableMapOf<FieldId, PersistentMap<ChunkId, UtArrayExpressionBase>>()
-
-        // sometimes we might have several updates for the same fieldId. It means that we updated it in the nested
-        // calls. In this case we should care only about the first and the last one value in the updates.
-        val staticFieldUpdates = update.staticFieldsUpdates
-            .groupBy { it.fieldId }
-            .mapValues { (_, values) -> values.first().value to values.last().value }
-
-        val previousMemoryStates = staticFieldsStates.toMutableMap()
-
-
-        /**
-         * sometimes we want to change initial memory states of fields of a certain class, so we erase all the
-         * information about previous states and update it with the current state. For now, this processing only takes
-         * place after receiving MethodResult from [STATIC_INITIALIZER] method call at the end of
-         * [Traverser.processStaticInitializer]. The value of `update.classIdToClearStatics` is equal to the
-         * class for which the static initialization has performed.
-         * TODO: JIRA:1610 -- refactor working with statics later
-         */
-//        update.classIdToClearStatics?.let { classId ->
-//            Scene.v().getSootClass(classId.name).fields.forEach { sootField ->
-//                previousMemoryStates.remove(sootField.fieldId)
-//            }
-//        }
-        update.classIdToClearStatics?.let { classId ->
-            classId.allDeclaredFieldIds.forEach { fieldId ->
-                previousMemoryStates.remove(fieldId)
-            }
-        }
-
-        val updatedStaticFields = staticFieldUpdates
-            .map { (fieldId, values) ->
-                val (initialValue, currentValue) = values
-
-                val previousValues = previousMemoryStates[fieldId]
-                var updatedValue = previousValues?.copy(stateAfter = currentValue)
-
-                if (updatedValue == null) {
-                    require(fieldId !in initialMemoryStates)
-                    initialMemoryStates[fieldId] = updCurrent
-                    updatedValue = FieldStates(stateBefore = initialValue, stateAfter = currentValue)
-                }
-
-                fieldId to updatedValue
-            }
-            .toMap()
-
-        val updVisitedValues = update.visitedValues.fold(visitedValues) { acc, addr ->
-            acc.store(addr, mkInt(1))
-        }
-
-        val updTouchedAddresses = update.touchedAddresses.fold(touchedAddresses) { acc, addr ->
-            acc.store(addr, UtTrue)
-        }
-
-        val updSpeculativelyNotNullAddresses = update.speculativelyNotNullAddresses.fold(speculativelyNotNullAddresses) { acc, addr ->
-            acc.store(addr, UtTrue)
-        }
-
-        return this.copy(
-            initial = updInitial,
-            current = updCurrent,
-            staticInitial = staticInitial.putAll(initialMemoryStates),
-            concrete = concrete.putAll(update.concrete),
-            mockInfos = mockInfos.mergeWithUpdate(update.mockInfos),
-            staticInstanceStorage = staticInstanceStorage.putAll(update.staticInstanceStorage),
-            initializedStaticFields = initializedStaticFields.addAll(update.initializedStaticFields),
-            staticFieldsStates = previousMemoryStates.toPersistentMap().putAll(updatedStaticFields),
-            meaningfulStaticFields = meaningfulStaticFields.addAll(update.meaningfulStaticFields),
-            addrToArrayType = addrToArrayType.putAll(update.addrToArrayType),
-            addrToMockInfo = addrToMockInfo.putAll(update.addrToMockInfo),
-            updates = updates + update,
-            visitedValues = updVisitedValues,
-            touchedAddresses = updTouchedAddresses,
-            instanceFieldReadOperations = instanceFieldReadOperations.addAll(update.instanceFieldReads),
-            speculativelyNotNullAddresses = updSpeculativelyNotNullAddresses,
-            symbolicEnumValues = symbolicEnumValues.addAll(update.symbolicEnumValues)
-        )
-    }
+    open fun copy(initial: PersistentMap<ChunkId, UtArrayExpressionBase> = persistentHashMapOf(),
+                  current: PersistentMap<ChunkId, UtArrayExpressionBase> = persistentHashMapOf(),
+                  staticInitial: PersistentMap<FieldId, PersistentMap<ChunkId, UtArrayExpressionBase>> = persistentHashMapOf(),
+                  concrete: PersistentMap<UtAddrExpression, Concrete> = persistentHashMapOf(),
+                  staticInstanceStorage: PersistentMap<ClassId, ObjectValue> = persistentHashMapOf(),
+                  initializedStaticFields: PersistentSet<FieldId> = persistentHashSetOf(),
+                  staticFieldsStates: PersistentMap<FieldId, FieldStates> = persistentHashMapOf(),
+                  meaningfulStaticFields: PersistentSet<FieldId> = persistentHashSetOf(),
+                  updates: MemoryUpdate = MemoryUpdate(),
+                  visitedValues: UtArrayExpressionBase = UtConstArrayExpression(
+                      mkInt(0),
+                      UtArraySort(UtAddrSort, UtIntSort)
+                  ),
+                  touchedAddresses: UtArrayExpressionBase = UtConstArrayExpression(
+                      UtFalse,
+                      UtArraySort(UtAddrSort, UtBoolSort)
+                  ),
+                  instanceFieldReadOperations: PersistentSet<InstanceFieldReadOperation> = persistentHashSetOf(),
+                  speculativelyNotNullAddresses: UtArrayExpressionBase = UtConstArrayExpression(
+                      UtFalse,
+                      UtArraySort(UtAddrSort, UtBoolSort)
+                  ),
+                  symbolicEnumValues: PersistentList<ObjectValue> = persistentListOf()) =
+        Memory(initial, current, staticInitial, concrete, staticInstanceStorage, initializedStaticFields,
+               staticFieldsStates, meaningfulStaticFields, updates, visitedValues, touchedAddresses,
+               instanceFieldReadOperations, speculativelyNotNullAddresses, symbolicEnumValues)
 
     /**
      * Returns copy of memory without local variables and updates.
@@ -354,17 +277,14 @@ data class StaticFieldMemoryUpdateInfo(
     val value: SymbolicValue
 )
 
-data class MemoryUpdate(
+open class MemoryUpdate(
     val stores: PersistentList<UtNamedStore> = persistentListOf(),
     val touchedChunkDescriptors: PersistentSet<MemoryChunkDescriptor> = persistentSetOf(),
     val concrete: PersistentMap<UtAddrExpression, Concrete> = persistentHashMapOf(),
-    val mockInfos: PersistentList<MockInfoEnriched> = persistentListOf(),
     val staticInstanceStorage: PersistentMap<ClassId, ObjectValue> = persistentHashMapOf(),
     val initializedStaticFields: PersistentSet<FieldId> = persistentHashSetOf(),
     val staticFieldsUpdates: PersistentList<StaticFieldMemoryUpdateInfo> = persistentListOf(),
     val meaningfulStaticFields: PersistentSet<FieldId> = persistentHashSetOf(),
-    val addrToArrayType: PersistentMap<UtAddrExpression, ArrayType> = persistentHashMapOf(),
-    val addrToMockInfo: PersistentMap<UtAddrExpression, UtMockInfo> = persistentHashMapOf(),
     val visitedValues: PersistentList<UtAddrExpression> = persistentListOf(),
     val touchedAddresses: PersistentList<UtAddrExpression> = persistentListOf(),
     val classIdToClearStatics: ClassId? = null,
@@ -377,13 +297,10 @@ data class MemoryUpdate(
             stores = stores.addAll(other.stores),
             touchedChunkDescriptors = touchedChunkDescriptors.addAll(other.touchedChunkDescriptors),
             concrete = concrete.putAll(other.concrete),
-            mockInfos = mockInfos.mergeWithUpdate(other.mockInfos),
             staticInstanceStorage = staticInstanceStorage.putAll(other.staticInstanceStorage),
             initializedStaticFields = initializedStaticFields.addAll(other.initializedStaticFields),
             staticFieldsUpdates = staticFieldsUpdates.addAll(other.staticFieldsUpdates),
             meaningfulStaticFields = meaningfulStaticFields.addAll(other.meaningfulStaticFields),
-            addrToArrayType = addrToArrayType.putAll(other.addrToArrayType),
-            addrToMockInfo = addrToMockInfo.putAll(other.addrToMockInfo),
             visitedValues = visitedValues.addAll(other.visitedValues),
             touchedAddresses = touchedAddresses.addAll(other.touchedAddresses),
             classIdToClearStatics = other.classIdToClearStatics,
@@ -394,34 +311,23 @@ data class MemoryUpdate(
 
     fun getSymbolicEnumValues(classId: ClassId): List<ObjectValue> =
         symbolicEnumValues.filter { it.type.classId == classId }
-}
 
-// array - Java Array
-// chunk - Memory Model (convenient for Solver)
-//       - solver's (get-model) results to parse
-
-/**
- * In current implementation it references
- * to SMT solver's array used for storage of some
- *
- * [id] is typically corresponds to Solver's array name
- * //TODO docs for 3 cases: array of primitives, array of objects, object's fields (including static)
- */
-data class MemoryChunkDescriptor(
-    val id: ChunkId,
-    val type: RefLikeType,
-    val elementType: Type
-) {
-    override fun equals(other: Any?): Boolean {
-        if (this === other) return true
-        if (javaClass != other?.javaClass) return false
-
-        other as MemoryChunkDescriptor
-
-        return id == other.id
-    }
-
-    override fun hashCode() = id.hashCode()
+    open fun copy(stores: PersistentList<UtNamedStore> = persistentListOf(),
+             touchedChunkDescriptors: PersistentSet<MemoryChunkDescriptor> = persistentSetOf(),
+             concrete: PersistentMap<UtAddrExpression, Concrete> = persistentHashMapOf(),
+             staticInstanceStorage: PersistentMap<ClassId, ObjectValue> = persistentHashMapOf(),
+             initializedStaticFields: PersistentSet<FieldId> = persistentHashSetOf(),
+             staticFieldsUpdates: PersistentList<StaticFieldMemoryUpdateInfo> = persistentListOf(),
+             meaningfulStaticFields: PersistentSet<FieldId> = persistentHashSetOf(),
+             visitedValues: PersistentList<UtAddrExpression> = persistentListOf(),
+             touchedAddresses: PersistentList<UtAddrExpression> = persistentListOf(),
+             classIdToClearStatics: ClassId? = null,
+             instanceFieldReads: PersistentSet<InstanceFieldReadOperation> = persistentHashSetOf(),
+             speculativelyNotNullAddresses: PersistentList<UtAddrExpression> = persistentListOf(),
+             symbolicEnumValues: PersistentList<ObjectValue> = persistentListOf()) =
+        MemoryUpdate(stores, touchedChunkDescriptors, concrete, staticInstanceStorage,
+            initializedStaticFields, staticFieldsUpdates, meaningfulStaticFields, visitedValues, touchedAddresses,
+            classIdToClearStatics, instanceFieldReads, speculativelyNotNullAddresses, symbolicEnumValues)
 }
 
 data class ChunkId(val type: String, val field: String) {
@@ -512,36 +418,3 @@ internal val STRING_INTERN_MAP = mkArrayConst(STRING_INTERN_MAP_LABEL, UtSeqSort
  * @see NATIVE_STRING_VALUE_DESCRIPTOR
  */
 fun internString(string: UtExpression): UtAddrExpression = UtAddrExpression(STRING_INTERN_MAP.select(string))
-
-/**
- *
- */
-private fun List<MockInfoEnriched>.mergeWithUpdate(other: List<MockInfoEnriched>): PersistentList<MockInfoEnriched> {
-    // map from MockInfo to MockInfoEnriched
-    val updates = other.associateByTo(mutableMapOf()) { it.mockInfo }
-
-    // create list from original values, then merge executables from update
-    val mergeResult = this.mapTo(mutableListOf()) { original ->
-        original + updates.remove(original.mockInfo)
-    }
-
-    // add tail: values from updates for which their MockInfo didn't present in [this] yet.
-    mergeResult += updates.values
-
-    return mergeResult.toPersistentList()
-}
-
-/**
- * Copies executables from [update] to the executables of [this] object.
- */
-private operator fun MockInfoEnriched.plus(update: MockInfoEnriched?): MockInfoEnriched {
-    if (update == null || update.executables.isEmpty()) return this
-
-    require(mockInfo == update.mockInfo)
-
-    return this.copy(executables = executables.toMutableMap().mergeValues(update.executables))
-}
-
-private fun <K, V> MutableMap<K, List<V>>.mergeValues(other: Map<K, List<V>>): Map<K, List<V>> = apply {
-    other.forEach { (key, values) -> merge(key, values) { v1, v2 -> v1 + v2 } }
-}

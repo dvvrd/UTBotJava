@@ -2,7 +2,6 @@ package org.utbot.engine
 
 import org.utbot.common.WorkaroundReason
 import org.utbot.common.workaround
-import org.utbot.engine.MAX_STRING_LENGTH_SIZE_BITS
 import org.utbot.engine.z3.convertVar
 import org.utbot.engine.z3.intValue
 import org.utbot.engine.z3.negate
@@ -16,8 +15,8 @@ import com.microsoft.z3.Model
 import com.microsoft.z3.SeqExpr
 import com.microsoft.z3.eval
 import com.microsoft.z3.mkSeqNth
-import soot.ByteType
-import soot.CharType
+
+internal const val MAX_STRING_LENGTH_SIZE_BITS = 8
 
 class Z3EvaluatorVisitor(private val model: Model, private val translator: Z3TranslatorVisitor) :
     UtExpressionVisitor<Expr> by translator {
@@ -267,8 +266,8 @@ class Z3EvaluatorVisitor(private val model: Model, private val translator: Z3Tra
     override fun visit(expr: UtStringCharAt): Expr = expr.run {
         translator.withContext {
             val charAtExpr = mkSeqNth(eval(string) as SeqExpr, mkBV2Int(eval(index) as BitVecExpr, true))
-            val z3var = charAtExpr.z3Variable(ByteType.v())
-            convertVar(z3var, CharType.v()).expr
+            val z3var = charAtExpr.z3Variable(UtByteSort)
+            convertVar(z3var, UtCharSort).expr
         }
     }
 

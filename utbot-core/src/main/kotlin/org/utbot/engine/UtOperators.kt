@@ -56,8 +56,8 @@ object Cmp : UtBinOperator(org.utbot.engine.z3.Cmp, ::intSort)
 object Cmpl : UtBinOperator(org.utbot.engine.z3.Cmpl, ::intSort)
 object Cmpg : UtBinOperator(org.utbot.engine.z3.Cmpg, ::intSort)
 
-fun maxSort(left: PrimitiveValue, right: PrimitiveValue) =
-    maxOf(left.expr.sort, right.expr.sort, UtIntSort, compareBy { it.rank() })
+fun maxSort(left: PrimitiveValue, right: PrimitiveValue) : UtPrimitiveSort =
+    maxOf(left.sort, right.sort, UtIntSort, compareBy { it.rank() })
 
 // Straight-forward maxSort when we don't want UtIntSort to be lesser limit
 fun simpleMaxSort(left: PrimitiveValue, right: PrimitiveValue) =

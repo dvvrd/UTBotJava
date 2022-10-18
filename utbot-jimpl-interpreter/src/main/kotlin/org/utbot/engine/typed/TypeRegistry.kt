@@ -1,4 +1,4 @@
-package org.utbot.engine
+package org.utbot.engine.typed
 
 import com.google.common.collect.HashBiMap
 import kotlinx.collections.immutable.persistentListOf

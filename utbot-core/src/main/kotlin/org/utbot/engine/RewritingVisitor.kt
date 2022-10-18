@@ -1,37 +1,10 @@
 package org.utbot.engine
 
-import org.utbot.common.unreachableBranch
-import org.utbot.engine.Add
-import org.utbot.engine.And
-import org.utbot.engine.Cmp
-import org.utbot.engine.Cmpg
-import org.utbot.engine.Cmpl
-import org.utbot.engine.Div
-import org.utbot.engine.Eq
-import org.utbot.engine.Ge
-import org.utbot.engine.Gt
-import org.utbot.engine.Le
-import org.utbot.engine.Lt
-import org.utbot.engine.Mul
-import org.utbot.engine.Ne
-import org.utbot.engine.Or
-import org.utbot.engine.PrimitiveValue
-import org.utbot.engine.Rem
-import org.utbot.engine.Shl
-import org.utbot.engine.Shr
-import org.utbot.engine.Sub
-import org.utbot.engine.Ushr
-import org.utbot.engine.Xor
-import org.utbot.engine.maxSort
-import org.utbot.engine.primitiveToLiteral
-import org.utbot.engine.primitiveToSymbolic
-import org.utbot.engine.symbolic.asHardConstraint
-import org.utbot.engine.toIntValue
-import org.utbot.engine.toPrimitiveValue
-import org.utbot.framework.UtSettings.useExpressionSimplification
-import java.util.IdentityHashMap
-import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.collections.immutable.toPersistentList
+import org.utbot.common.unreachableBranch
+import org.utbot.framework.UtSettings.useExpressionSimplification
+import java.util.*
+import java.util.concurrent.atomic.AtomicInteger
 
 
 /**
@@ -85,7 +58,7 @@ open class RewritingVisitor(
      * @param substituteResult - if true then try to substitute result of block(expr)
      *  with equal concrete value from [eqs] map.
      */
-    private inline fun applySimplification(
+    protected inline fun applySimplification(
         expr: UtExpression,
         substituteResult: Boolean = true,
         crossinline block: (() -> UtExpression) = { expr },
@@ -129,10 +102,7 @@ open class RewritingVisitor(
             messageParts.joinToString(System.lineSeparator(), prefix = System.lineSeparator())
         }
 
-        val expectedType = sourceSort.type
-        val resultType = resultSort.type
-
-        return UtCastExpression(result.toPrimitiveValue(resultType), expectedType)
+        return UtCastExpression(result.toPrimitiveValue(resultSort), sourceSort)
     }
 
     override fun visit(expr: UtArraySelectExpression): UtExpression =
@@ -257,8 +227,8 @@ open class RewritingVisitor(
         applySimplification(expr) {
             val left = expr.left.expr.accept(this)
             val right = expr.right.expr.accept(this)
-            val leftPrimitive = left.toPrimitiveValue(expr.left.type)
-            val rightPrimitive = right.toPrimitiveValue(expr.right.type)
+            val leftPrimitive = left.toPrimitiveValue(expr.left.sort)
+            val rightPrimitive = right.toPrimitiveValue(expr.right.sort)
 
             when (expr.operator) {
                 // Sort of pattern matching...
@@ -282,7 +252,7 @@ open class RewritingVisitor(
                         Add(
                             left.left,
                             evalIntegralLiterals(left.right.expr, right, expr.right.expr.sort, Long::plus)
-                                .toPrimitiveValue(expr.right.type)
+                                .toPrimitiveValue(expr.right.sort)
                         )
                     else -> Add(leftPrimitive, rightPrimitive)
                 }
@@ -290,7 +260,7 @@ open class RewritingVisitor(
                 // Sub(a, b) ---> Add(a, Neg b)
                 Sub -> Add(
                     leftPrimitive,
-                    UtNegExpression(rightPrimitive).toPrimitiveValue(expr.right.type)
+                    UtNegExpression(rightPrimitive).toPrimitiveValue(expr.right.sort)
                 ).accept(this)
                 Mul -> when {
                     // CONFLUENCE:UtBot+Expression+Optimizations#UtBotExpressionOptimizations-mulConcrete
@@ -319,9 +289,9 @@ open class RewritingVisitor(
                                 Mul(
                                     left.left,
                                     rightPrimitive
-                                ).toPrimitiveValue(expr.left.type),
+                                ).toPrimitiveValue(expr.left.sort),
                                 evalIntegralLiterals(left.right.expr, right, expr.resultSort, Long::times)
-                                    .toPrimitiveValue(expr.right.type)
+                                    .toPrimitiveValue(expr.right.sort)
                             )
 
                             // CONFLUENCE:UtBot+Expression+Optimizations#UtBotExpressionOptimizations-mulMulOpenLiteral
@@ -329,7 +299,7 @@ open class RewritingVisitor(
                             is Mul -> Mul(
                                 left.left,
                                 evalIntegralLiterals(left.right.expr, right, expr.right.expr.sort, Long::times)
-                                    .toPrimitiveValue(expr.right.type)
+                                    .toPrimitiveValue(expr.right.sort)
                             )
                             else -> Mul(leftPrimitive, rightPrimitive)
                         }
@@ -534,7 +504,8 @@ open class RewritingVisitor(
                 is UtBoolOpExpression -> {
                     val left = exp.left
                     val right = exp.right
-                    if (left.type is IntegerType && right.type is IntegerType) {
+                    // todo: FRAGILE: information loss? @dvvrd
+                    if (left.sort is IntegerType && right.sort is IntegerType) {
                         when (exp.operator) {
                             // not Ne(a, b) ---> Eq(a, b)
                             Ne -> Eq(left, right)
@@ -622,10 +593,10 @@ open class RewritingVisitor(
                     UtLongSort -> mkLong(-(value as Long))
                     UtFp32Sort -> mkFloat(-(value as Float))
                     UtFp64Sort -> mkDouble(-(value as Double))
-                    else -> UtNegExpression(variable.toPrimitiveValue(expr.variable.type))
+                    else -> UtNegExpression(variable.toPrimitiveValue(expr.variable.sort))
                 }
             } else {
-                UtNegExpression(variable.toPrimitiveValue(expr.variable.type))
+                UtNegExpression(variable.toPrimitiveValue(expr.variable.sort))
             }
         }
 
@@ -634,14 +605,14 @@ open class RewritingVisitor(
             val newExpr = expr.variable.expr.accept(this)
             when {
                 // Cast(a@(PrimitiveValue type), type) ---> a
-                expr.type == expr.variable.type -> newExpr
+                expr.sort == expr.variable.sort -> newExpr
                 newExpr.isConcrete -> when (newExpr) {
                     is UtBoolLiteral -> newExpr.toLong().toValueWithSort(expr.sort).primitiveToSymbolic().expr
                     is UtBvLiteral -> newExpr.toLong().toValueWithSort(expr.sort).primitiveToSymbolic().expr
                     is UtFpLiteral -> newExpr.value.toValueWithSort(expr.sort).primitiveToSymbolic().expr
-                    else -> UtCastExpression(newExpr.toPrimitiveValue(expr.variable.type), expr.type)
+                    else -> UtCastExpression(newExpr.toPrimitiveValue(expr.variable.sort), expr.sort)
                 }
-                else -> UtCastExpression(newExpr.toPrimitiveValue(expr.variable.type), expr.type)
+                else -> UtCastExpression(newExpr.toPrimitiveValue(expr.variable.sort), expr.sort)
             }
         }
 
@@ -771,8 +742,8 @@ open class RewritingVisitor(
         applySimplification(expr) {
             val left = expr.left.expr.accept(this)
             val right = expr.right.expr.accept(this)
-            val leftPrimitive = left.toPrimitiveValue(expr.left.type)
-            val rightPrimitive = right.toPrimitiveValue(expr.right.type)
+            val leftPrimitive = left.toPrimitiveValue(expr.left.sort)
+            val rightPrimitive = right.toPrimitiveValue(expr.right.sort)
             when (expr.operator) {
                 Eq -> when {
                     // CONFLUENCE:UtBot+Expression+Optimizations#UtBotExpressionOptimizations-eqConcrete
@@ -796,14 +767,14 @@ open class RewritingVisitor(
                                 left.right.expr,
                                 maxSort(expr.right, left.right),
                                 Long::minus
-                            ).toPrimitiveValue(maxType(expr.right.type, left.right.type))
+                            ).toPrimitiveValue(maxSort(expr.right, left.right))
                         )
                         // CONFLUENCE:UtBot+Expression+Optimizations#UtBotExpressionOptimizations-eqXorOpenLiteral
                         // Eq(Xor(a, Integral b), Integral c) ---> Eq(a, Integral (c `xor` b))
                         Xor -> Eq(
                             left.left,
                             evalIntegralLiterals(right, left.right.expr, maxSort(expr.right, left.right), Long::xor)
-                                .toPrimitiveValue(maxType(expr.right.type, left.right.type))
+                                .toPrimitiveValue(maxSort(expr.right, left.right))
                         )
                         else -> Eq(leftPrimitive, rightPrimitive)
                     }
@@ -821,7 +792,7 @@ open class RewritingVisitor(
                     right is UtFpLiteral && right.value.toDouble().isNaN() -> UtFalse
                     // CONFLUENCE:UtBot+Expression+Optimizations#UtBotExpressionOptimizations-eqEqual
                     // Eq(a a) && a.sort !is FPSort -> true
-                    left == right && expr.left.type !is FloatType && expr.left.type !is DoubleType -> UtTrue
+                    left == right && expr.left.sort !is UtFloatSort && expr.left.sort !is UtDoubleSort -> UtTrue
                     // CONFLUENCE:UtBot+Expression+Optimizations#UtBotExpressionOptimizations-eqLiteralToRight
                     // Eq(a@(Concrete _), b) ---> Eq(b, a)
                     left.isConcrete -> Eq(
@@ -896,42 +867,6 @@ open class RewritingVisitor(
                 }
             }
         }
-
-    private fun maxType(left: Type, right: Type): Type = when {
-        left is LongType -> left
-        right is LongType -> right
-        else -> IntType.v()
-    }
-
-    override fun visit(expr: UtIsExpression): UtExpression = applySimplification(expr, false) {
-        UtIsExpression(expr.addr.accept(this) as UtAddrExpression, expr.typeStorage, expr.numberOfTypes)
-    }
-
-    override fun visit(expr: UtGenericExpression): UtExpression = applySimplification(expr, false) {
-        UtGenericExpression(expr.addr.accept(this) as UtAddrExpression, expr.types, expr.numberOfTypes)
-    }
-
-    override fun visit(expr: UtIsGenericTypeExpression): UtExpression = applySimplification(expr, false) {
-        UtIsGenericTypeExpression(
-            expr.addr.accept(this) as UtAddrExpression,
-            expr.baseAddr.accept(this) as UtAddrExpression,
-            expr.parameterTypeIndex
-        )
-    }
-
-    override fun visit(expr: UtEqGenericTypeParametersExpression): UtExpression =
-        applySimplification(expr, false) {
-            UtEqGenericTypeParametersExpression(
-                expr.firstAddr.accept(this) as UtAddrExpression,
-                expr.secondAddr.accept(this) as UtAddrExpression,
-                expr.indexMapping
-            )
-        }
-
-    override fun visit(expr: UtInstanceOfExpression): UtExpression = applySimplification(expr, false) {
-        val simplifiedHard = (expr.constraint.accept(this) as UtBoolExpression).asHardConstraint()
-        UtInstanceOfExpression(expr.symbolicStateUpdate.copy(hardConstraints = simplifiedHard))
-    }
 
     // CONFLUENCE:UtBot+Expression+Optimizations#UtBotExpressionOptimizations-ite
     // ite(true, then, _)  ---> then
@@ -1233,7 +1168,7 @@ class AxiomInstantiationRewritingVisitor(
      */
     override fun visit(expr: UtArrayInsert): UtExpression {
         val arrayInstance = instantiateArrayAsNewConst(expr)
-        val index = expr.index.expr.accept(this).toPrimitiveValue(expr.index.type)
+        val index = expr.index.expr.accept(this).toPrimitiveValue(expr.index.sort)
         val element = expr.element.accept(this)
         val selectedIndex = selectIndexStack.last()
         val pushedIndex = UtIteExpression(
@@ -1259,9 +1194,9 @@ class AxiomInstantiationRewritingVisitor(
      */
     override fun visit(expr: UtArrayInsertRange): UtExpression {
         val arrayInstance = instantiateArrayAsNewConst(expr)
-        val index = expr.index.expr.accept(this).toPrimitiveValue(expr.index.type)
-        val from = expr.from.expr.accept(this).toPrimitiveValue(expr.index.type)
-        val length = expr.length.expr.accept(this).toPrimitiveValue(expr.length.type)
+        val index = expr.index.expr.accept(this).toPrimitiveValue(expr.index.sort)
+        val from = expr.from.expr.accept(this).toPrimitiveValue(expr.index.sort)
+        val length = expr.length.expr.accept(this).toPrimitiveValue(expr.length.sort)
         val selectedIndex = selectIndexStack.last()
         val pushedArrayInstanceIndex =
             UtIteExpression(Lt(selectedIndex, index), selectedIndex.expr, Sub(selectedIndex, length))
@@ -1283,7 +1218,7 @@ class AxiomInstantiationRewritingVisitor(
      */
     override fun visit(expr: UtArrayRemove): UtExpression {
         val arrayInstance = instantiateArrayAsNewConst(expr)
-        val index = expr.index.expr.accept(this).toPrimitiveValue(expr.index.type)
+        val index = expr.index.expr.accept(this).toPrimitiveValue(expr.index.sort)
         val selectedIndex = selectIndexStack.last()
         val pushedIndex = UtIteExpression(
             Lt(selectedIndex, index),
@@ -1304,8 +1239,8 @@ class AxiomInstantiationRewritingVisitor(
      */
     override fun visit(expr: UtArrayRemoveRange): UtExpression {
         val arrayInstance = instantiateArrayAsNewConst(expr)
-        val index = expr.index.expr.accept(this).toPrimitiveValue(expr.index.type)
-        val length = expr.length.expr.accept(this).toPrimitiveValue(expr.length.type)
+        val index = expr.index.expr.accept(this).toPrimitiveValue(expr.index.sort)
+        val length = expr.length.expr.accept(this).toPrimitiveValue(expr.length.sort)
         val selectedIndex = selectIndexStack.last()
         val pushedIndex = UtIteExpression(
             Lt(selectedIndex, index),
@@ -1327,9 +1262,9 @@ class AxiomInstantiationRewritingVisitor(
      */
     override fun visit(expr: UtArraySetRange): UtExpression {
         val arrayInstance = instantiateArrayAsNewConst(expr)
-        val index = expr.index.expr.accept(this).toPrimitiveValue(expr.index.type)
-        val from = expr.from.expr.accept(this).toPrimitiveValue(expr.index.type)
-        val length = expr.length.expr.accept(this).toPrimitiveValue(expr.length.type)
+        val index = expr.index.expr.accept(this).toPrimitiveValue(expr.index.sort)
+        val from = expr.from.expr.accept(this).toPrimitiveValue(expr.index.sort)
+        val length = expr.length.expr.accept(this).toPrimitiveValue(expr.length.sort)
         val selectedIndex = selectIndexStack.last()
         val arrayExpression = expr.arrayExpression.accept(this)
         val pushedIndex = Add(Sub(selectedIndex, index).toIntValue(), from)

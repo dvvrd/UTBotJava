@@ -1,5 +1,7 @@
-package org.utbot.engine
+package org.utbot.engine.typed
 
+import org.utbot.engine.*
+import soot.*
 import java.util.*
 
 /**
@@ -18,7 +20,10 @@ class UtIsExpression(
 
     override val hashCode = Objects.hash(addr, typeStorage, numberOfTypes)
 
-    override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult = visitor.visit(this)
+    override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult {
+        visitor as TypeExpressionVisitor<TResult>
+        return visitor.visit(this)
+    }
 
     override fun toString(): String {
         val possibleTypes = if (typeStorage.possibleConcreteTypes.size == 1) {
@@ -55,8 +60,10 @@ class UtGenericExpression(
     val numberOfTypes: Int
 ) : UtBoolExpression() {
     override val hashCode = Objects.hash(addr, types, numberOfTypes)
-    override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult = visitor.visit(this)
-
+    override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult {
+        visitor as TypeExpressionVisitor<TResult>
+        return visitor.visit(this)
+    }
     override fun toString(): String {
         val postfix = types.joinToString(",", "<", ">")
         return "(generic $addr $postfix)"
@@ -96,8 +103,10 @@ class UtInstanceOfExpression(
     val constraint: UtBoolExpression get() = mkAnd(symbolicStateUpdate.hardConstraints.constraints.toList())
     override val hashCode = symbolicStateUpdate.hashCode()
 
-    override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult = visitor.visit(this)
-
+    override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult {
+        visitor as TypeExpressionVisitor<TResult>
+        return visitor.visit(this)
+    }
     override fun toString() = "$constraint"
 }
 
@@ -115,8 +124,10 @@ class UtEqGenericTypeParametersExpression(
     val indexMapping: Map<Int, Int>
 ) : UtBoolExpression() {
     override val hashCode = Objects.hash(firstAddr, secondAddr, indexMapping)
-    override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult = visitor.visit(this)
-
+    override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult {
+        visitor as TypeExpressionVisitor<TResult>
+        return visitor.visit(this)
+    }
     override fun toString(): String {
         return "(generic-eq $firstAddr $secondAddr by <${indexMapping.toList()}>)"
     }
@@ -150,8 +161,10 @@ class UtIsGenericTypeExpression(
     val parameterTypeIndex: Int
 ) : UtBoolExpression() {
     override val hashCode = Objects.hash(addr, baseAddr, parameterTypeIndex)
-    override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult = visitor.visit(this)
-
+    override fun <TResult> accept(visitor: UtExpressionVisitor<TResult>): TResult {
+        visitor as TypeExpressionVisitor<TResult>
+        return visitor.visit(this)
+    }
     override fun toString(): String {
         return "(generic-is $addr $baseAddr<\$$parameterTypeIndex>)"
     }
@@ -170,4 +183,24 @@ class UtIsGenericTypeExpression(
     }
 
     override fun hashCode() = hashCode
+}
+
+fun Type.toSort(): UtSort = when (this) {
+    is ByteType -> UtByteSort
+    is CharType -> UtCharSort
+    is ShortType -> UtShortSort
+    is IntType -> UtIntSort
+    is LongType -> UtLongSort
+
+    is FloatType    -> UtFp32Sort
+    is DoubleType   -> UtFp64Sort
+
+    is BooleanType  -> UtBoolSort
+
+    is SeqType      -> UtSeqSort
+
+    is ArrayType -> if (numDimensions == 1) UtArraySort(UtAddrSort, elementType.toSort()) else UtArraySort(UtAddrSort, UtAddrSort)
+    is RefType -> UtAddrSort
+
+    else -> error("${this::class} sort is not implemented")
 }
